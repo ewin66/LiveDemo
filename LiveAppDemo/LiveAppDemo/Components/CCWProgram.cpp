@@ -52,8 +52,8 @@ void CCWProgram::compileShader(const char *vertStr, const char *fragStr) {
         return;
     }
 
-    addShader(programID, vertStr, GL_VERTEX_SHADER);
-    addShader(programID, fragStr, GL_FRAGMENT_SHADER);
+    addShader(programID, vertStr, GL_VERTEX_SHADER, &vertShader);
+    addShader(programID, fragStr, GL_FRAGMENT_SHADER, &fragShader);
 
     GLint result = 0;
     GLchar eLog[1024] = { 0 };
@@ -69,7 +69,7 @@ void CCWProgram::compileShader(const char *vertStr, const char *fragStr) {
 }
 
 
-void CCWProgram::addShader(GLuint theProgram, const char* shaderCode, GLenum shaderType)
+void CCWProgram::addShader(GLuint theProgram, const char* shaderCode, GLenum shaderType, GLuint *shaderID)
 {
     GLuint theShader = glCreateShader(shaderType);
 
@@ -94,6 +94,8 @@ void CCWProgram::addShader(GLuint theProgram, const char* shaderCode, GLenum sha
     }
 
     glAttachShader(theProgram, theShader);
+
+    *shaderID = theShader;
 }
 
 void CCWProgram::clearProgram() {
@@ -101,6 +103,14 @@ void CCWProgram::clearProgram() {
     {
         glDeleteProgram(programID);
         programID = 0;
+    }
+    if (vertShader) {
+        glDeleteShader(vertShader);
+        vertShader = 0;
+    }
+    if (fragShader) {
+        glDeleteShader(fragShader);
+        fragShader = 0;
     }
 }
 
@@ -112,4 +122,12 @@ CCWProgram::~CCWProgram()
 
 GLuint CCWProgram::getProgram() {
     return programID;
+}
+
+int CCWProgram::getUniformLocation(const char* uniformName) {
+    return glGetUniformLocation(programID, uniformName);
+}
+
+int CCWProgram::getAttributeIndex(const char* attributeName) {
+    return glGetAttribLocation(programID, attributeName);
 }

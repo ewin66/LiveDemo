@@ -12,6 +12,8 @@
 #import "CCWVideoSharedContext.h"
 #import <AVFoundation/AVFoundation.h>
 
+#import "CCWProgram.hpp"
+
 @interface CCWDisplayView () {
     GLint positionLocation, inputTextureCoordinateLocation;
     GLint inputTextureUniform;
@@ -30,11 +32,9 @@
     GLsizei _bufferWidth, _bufferHeight;
     GLuint _luminanceTexture, _chrominanceTexture;
     CVOpenGLESTextureRef _luminanceTextureRef, _chrominanceTextureRef;
-}
 
-@property (nonatomic, assign) GLuint displayProgram;
-@property (nonatomic, assign) GLuint vertexShader;
-@property (nonatomic, assign) GLuint fragShader;
+    CCWProgram displayProgram;
+}
 @end
 
 @implementation CCWDisplayView
@@ -60,32 +60,25 @@ static const GLfloat kColorConversion601FullRange[] = {
             kEAGLDrawablePropertyRetainedBacking : @(NO),
             kEAGLDrawablePropertyColorFormat : kEAGLColorFormatRGBA8
         };
-
-//        syncToVideoProcessorQueue(^{
-            [[CCWVideoSharedContext context] useVideoProcessingContext];
-
-            self.displayProgram = glCreateProgram();
-
-            self.vertexShader = [self buildShaderProgramForPath:[[NSBundle mainBundle] pathForResource:@"VertexShader" ofType:@"vsh"] type:GL_VERTEX_SHADER];
-            self.fragShader = [self buildShaderProgramForPath:[[NSBundle mainBundle] pathForResource:@"YuvConversionFullRange" ofType:@"fsh"]
-                               type:GL_FRAGMENT_SHADER];
-
-            //在shader里使用layout (xx)的形式能免去这两行冗余处理
-            glBindAttribLocation(self.displayProgram, 0, "position");
-            glBindAttribLocation(self.displayProgram, 1, "inputTextureCoordinate");
-
-            [self linkProgram];
-
-//            self->positionLocation = 0; self->inputTextureCoordinateLocation = 1;
-//            self->inputTextureUniform = glGetUniformLocation(self.displayProgram, "inputImageTexture");
-
-
-            _luminanceTextureAtt = glGetUniformLocation(self.displayProgram, "luminanceTexture");
-            _chrominanceTextureAtt = glGetUniformLocation(self.displayProgram, "chrominanceTexture");
-            _colorConversionMatrixAtt = glGetUniformLocation(self.displayProgram, "colorConversionMatrix");
-
-            glUseProgram(self.displayProgram);
-            [self setupFramebuffer];
+        
+        //        syncToVideoProcessorQueue(^{
+        [[CCWVideoSharedContext context] useVideoProcessingContext];
+        
+        displayProgram.compile([[NSBundle mainBundle] pathForResource:@"VertexShader" ofType:@"vsh"].UTF8String, [[NSBundle mainBundle] pathForResource:@"YuvConversionFullRange" ofType:@"fsh"].UTF8String);
+        
+        
+        //在shader里使用layout (xx)的形式能免去这两行冗余处理
+        
+        GLuint program = displayProgram.getProgram();
+        glBindAttribLocation(program, 0, "position");
+        glBindAttribLocation(program, 1, "inputTextureCoordinate");
+        
+        _luminanceTextureAtt = displayProgram.getUniformLocation("luminanceTexture");
+        _chrominanceTextureAtt = displayProgram.getUniformLocation("chrominanceTexture");
+        _colorConversionMatrixAtt = displayProgram.getUniformLocation("colorConversionMatrix");
+        
+        glUseProgram(program);
+        [self setupFramebuffer];
 //        });
     }
     return self;
@@ -240,44 +233,6 @@ static const GLfloat kColorConversion601FullRange[] = {
     syncToVideoProcessorQueue(^{
         [self destroyFramebuffers];
     });
-}
-
-#pragma mark - Private
-//todo:待抽出
-- (GLuint)buildShaderProgramForPath:(NSString *)path type:(GLenum)type {
-    const char *shaderL = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil].UTF8String;
-    GLuint shader = glCreateShader(type);
-    const GLchar *source = (GLchar *)shaderL;
-    glShaderSource(shader, 1, &source, NULL);
-    glCompileShader(shader);
-    GLint status;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-    if (status != GL_TRUE) {
-        NSLog(@"failed to add shader:%@",path);
-    }
-    glAttachShader(self.displayProgram, shader);
-    return shader;
-
-}
-
-- (void)linkProgram {
-    glLinkProgram(self.displayProgram);
-    GLint status = 0;
-    glGetProgramiv(self.displayProgram, GL_LINK_STATUS, &status);
-    if (status == GL_FALSE) {
-        NSCAssert(NO, @"link display shader 失败");
-    }
-
-    if (self.vertexShader)
-    {
-        glDeleteShader(self.vertexShader);
-        self.vertexShader = 0;
-    }
-    if (self.fragShader)
-    {
-        glDeleteShader(self.fragShader);
-        self.fragShader = 0;
-    }
 }
 
 #pragma mark - Micro implementation
